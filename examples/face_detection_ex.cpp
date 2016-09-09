@@ -38,65 +38,110 @@
 
 
 #include <dlib/image_processing/frontal_face_detector.h>
+#include <dlib/opencv/cv_image.h>
 #include <dlib/gui_widgets.h>
 #include <dlib/image_io.h>
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 using namespace dlib;
 using namespace std;
 
-// ----------------------------------------------------------------------------------------
+std::vector<cv::Rect> dets2Rects(std::vector<rectangle>& dets)
+{
+	std::vector<cv::Rect> rects;
+	for (int i = 0; i < dets.size(); i++)
+	{
+		cv::Rect rc(cv::Point(dets[i].left(), dets[i].top()), cv::Point(dets[i].right(), dets[i].bottom()));
+		rects.push_back(rc);
+	}
+	return rects;
+}
 
+// ----------------------------------------------------------------------------------------
+int main_video(int argc, char** argv)
+{
+	cout << "start video" << endl;
+	cv::VideoCapture cap(0);
+	cv::Mat frame;
+	frontal_face_detector detector = get_frontal_face_detector();
+
+	int key = 0;
+	while (key != 27)
+	{
+		cap >> frame;
+
+		cv::imshow("image", frame);
+		matrix<dlib::rgb_pixel> img;
+		assign_image(img, dlib::cv_image<dlib::rgb_pixel>(frame));
+		std::vector<rectangle> dets = detector(img);
+		std::vector<cv::Rect> rects = dets2Rects(dets);
+		for (int i = 0; i < rects.size(); i++)
+		{
+			cv::rectangle(frame, rects[i], cv::Scalar(0, 0, 255), 2);
+		}
+		cv::imshow("results", frame);
+		key = cv::waitKey(1);
+
+	}
+	return 1;
+}
+
+int main_jpeg(int argc, char** argv)
+{
+	try
+	{
+		if (argc == 1)
+		{
+			cout << "Give some image files as arguments to this program." << endl;
+			return 0;
+		}
+
+		frontal_face_detector detector = get_frontal_face_detector();
+		image_window win;
+
+		// Loop over all the images provided on the command line.
+		for (int i = 1; i < argc; ++i)
+		{
+			cout << "processing image " << argv[i] << endl;
+			array2d<unsigned char> img;
+			load_image(img, argv[i]);
+			// Make the image bigger by a factor of two.  This is useful since
+			// the face detector looks for faces that are about 80 by 80 pixels
+			// or larger.  Therefore, if you want to find faces that are smaller
+			// than that then you need to upsample the image as we do here by
+			// calling pyramid_up().  So this will allow it to detect faces that
+			// are at least 40 by 40 pixels in size.  We could call pyramid_up()
+			// again to find even smaller faces, but note that every time we
+			// upsample the image we make the detector run slower since it must
+			// process a larger image.
+			pyramid_up(img);
+
+			// Now tell the face detector to give us a list of bounding boxes
+			// around all the faces it can find in the image.
+			std::vector<rectangle> dets = detector(img);
+
+			cout << "Number of faces detected: " << dets.size() << endl;
+			// Now we show the image on the screen and the face detections as
+			// red overlay boxes.
+			win.clear_overlay();
+			win.set_image(img);
+			win.add_overlay(dets, rgb_pixel(255, 0, 0));
+
+			cout << "Hit enter to process the next image..." << endl;
+			cin.get();
+		}
+	}
+	catch (exception& e)
+	{
+		cout << "\nexception thrown!" << endl;
+		cout << e.what() << endl;
+	}
+}
 int main(int argc, char** argv)
 {  
-    try
-    {
-        if (argc == 1)
-        {
-            cout << "Give some image files as arguments to this program." << endl;
-            return 0;
-        }
-
-        frontal_face_detector detector = get_frontal_face_detector();
-        image_window win;
-
-        // Loop over all the images provided on the command line.
-        for (int i = 1; i < argc; ++i)
-        {
-            cout << "processing image " << argv[i] << endl;
-            array2d<unsigned char> img;
-            load_image(img, argv[i]);
-            // Make the image bigger by a factor of two.  This is useful since
-            // the face detector looks for faces that are about 80 by 80 pixels
-            // or larger.  Therefore, if you want to find faces that are smaller
-            // than that then you need to upsample the image as we do here by
-            // calling pyramid_up().  So this will allow it to detect faces that
-            // are at least 40 by 40 pixels in size.  We could call pyramid_up()
-            // again to find even smaller faces, but note that every time we
-            // upsample the image we make the detector run slower since it must
-            // process a larger image.
-            pyramid_up(img);
-
-            // Now tell the face detector to give us a list of bounding boxes
-            // around all the faces it can find in the image.
-            std::vector<rectangle> dets = detector(img);
-
-            cout << "Number of faces detected: " << dets.size() << endl;
-            // Now we show the image on the screen and the face detections as
-            // red overlay boxes.
-            win.clear_overlay();
-            win.set_image(img);
-            win.add_overlay(dets, rgb_pixel(255,0,0));
-
-            cout << "Hit enter to process the next image..." << endl;
-            cin.get();
-        }
-    }
-    catch (exception& e)
-    {
-        cout << "\nexception thrown!" << endl;
-        cout << e.what() << endl;
-    }
+	//main_jpeg(argc, argv);
+	main_video(argc, argv);
 }
 
 // ----------------------------------------------------------------------------------------

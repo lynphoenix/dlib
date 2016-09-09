@@ -40,17 +40,101 @@
 
 #include <dlib/image_processing/frontal_face_detector.h>
 #include <dlib/image_processing/render_face_detections.h>
+#include <dlib/opencv/cv_image.h>
 #include <dlib/image_processing.h>
 #include <dlib/gui_widgets.h>
 #include <dlib/image_io.h>
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
 using namespace dlib;
 using namespace std;
 
-// ----------------------------------------------------------------------------------------
+void render_faces(cv::Mat& img, std::vector<full_object_detection>& dets)
+{
+	//std::cout << "render_face_detections" << std::endl;
+	for (unsigned long i = 0; i < dets.size(); ++i)
+	{
+		DLIB_CASSERT(dets[i].num_parts() == 68,
+			"\t std::vector<image_window::overlay_line> render_face_detections()"
+			<< "\n\t Invalid inputs were given to this function. "
+			<< "\n\t dets[" << i << "].num_parts():  " << dets[i].num_parts()
+		);
+		const full_object_detection& d = dets[i];
+		for (int j=0; j<68; j++)
+		{
+			//std::cout << d.part(j) << std::endl;
+			cv::Point pt(d.part(j).x(), d.part(j).y());
+			cv::circle(img, pt, 2, cv::Scalar(0, 0, 255), 1);
+			//std::cout << pt << std::endl;
+		}
+	}
 
-int main(int argc, char** argv)
+}
+
+std::vector<cv::Rect> dets2Rects(std::vector<rectangle>& dets)
+{
+	std::vector<cv::Rect> rects;
+	for (int i = 0; i < dets.size(); i++)
+	{
+		cv::Rect rc(cv::Point(dets[i].left(), dets[i].top()), cv::Point(dets[i].right(), dets[i].bottom()));
+		rects.push_back(rc);
+	}
+	return rects;
+}
+
+// ----------------------------------------------------------------------------------------
+int main_video(int argc, char** argv)
+{
+	frontal_face_detector detector = get_frontal_face_detector();
+	shape_predictor sp;
+	deserialize(argv[1]) >> sp;
+
+	cv::VideoCapture cap(0);
+	cv::Mat frame;
+	int key = 0;
+	while (key != 27)
+	{
+		cap >> frame;
+		cv::imshow("image", frame);
+		matrix<dlib::rgb_pixel> img;
+		assign_image(img, dlib::cv_image<dlib::rgb_pixel>(frame));
+		std::vector<rectangle> dets = detector(img);
+		std::vector<cv::Rect> rects = dets2Rects(dets);
+		for (int i = 0; i < rects.size(); i++)
+		{
+			cv::rectangle(frame, rects[i], cv::Scalar(0, 0, 255), 2);
+		}
+
+		// Now we will go ask the shape_predictor to tell us the pose of
+		// each face we detected.
+		std::vector<full_object_detection> shapes;
+		for (unsigned long j = 0; j < dets.size(); ++j)
+		{
+			full_object_detection shape = sp(img, dets[j]);
+			cout << "number of parts: " << shape.num_parts() << endl;
+			cout << "pixel position of first part:  " << shape.part(0) << endl;
+			cout << "pixel position of second part: " << shape.part(1) << endl;
+			// You get the idea, you can get all the face part locations if
+			// you want them.  Here we just store them in shapes so we can
+			// put them on the screen.
+			shapes.push_back(shape);
+		}
+		std::cout << "render_faces" << std::endl;
+
+		// Now let's view our face poses on the screen.
+		render_faces(frame, shapes);
+
+		cv::imshow("results", frame);
+		key = cv::waitKey(1);
+
+	}
+	return 1;
+
+}
+
+// ----------------------------------------------------------------------------------------
+int main_jpeg(int argc, char** argv)
 {  
     try
     {
@@ -131,4 +215,9 @@ int main(int argc, char** argv)
 }
 
 // ----------------------------------------------------------------------------------------
+int main(int argc, char** argv)
+{
+	//main_jpeg(argc, argv);
+	main_video(argc, argv);
+}
 
